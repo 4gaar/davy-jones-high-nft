@@ -10,3 +10,5 @@ artifacts
 bin/**/*
 secrets.json
 staking_rewards.xlsx
+.deps
+~$staking_rewards.xlsx

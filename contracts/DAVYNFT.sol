@@ -37,6 +37,17 @@ contract DAVYNFT is ERC721, Ownable {
         return baseURI_;
     }
 
+    function initializeRollingTokenHash(bytes32 seed) public onlyOwner {
+        // console.log("seed:", _bytes32ToHex(seed));
+
+        require(
+            _rollingTokenHash == bytes32(0),
+            "The rolling token seed has already been set"
+        );
+
+        _rollingTokenHash = seed;
+    }
+
     function getTokenString() public view returns (string memory) {
         return _tokenString;
     }
@@ -81,7 +92,7 @@ contract DAVYNFT is ERC721, Ownable {
         } else {
             return keccak256(bytes.concat(value1, value2));
         }
-    }  
+    }
 
     function mint(
         uint256 tokenId,
@@ -89,12 +100,15 @@ contract DAVYNFT is ERC721, Ownable {
         bytes32 tokenHash,
         bytes32 rollingTokenHash
     ) external payable {
-        string memory expectedRollingTokenHash = calculateHash(
-            bytes.concat(concatenateHash(_rollingTokenHash, tokenHash))
-        );
+ 
+        // console.log("tokenId:                 ", tokenId);
+        // console.log("_rollingTokenHash:       ", _bytes32ToHex(_rollingTokenHash));
+        // console.log("tokenHash:               ", _bytes32ToHex(tokenHash));
+        // console.log("rollingTokenHash:        ", _bytes32ToHex(rollingTokenHash));
+        // console.log("expectedRollingTokenHash:", _bytes32ToHex(concatenateHash(_rollingTokenHash, tokenHash)));
 
         require(
-            keccak256(abi.encodePacked(expectedRollingTokenHash)) ==
+            keccak256(abi.encodePacked(concatenateHash(_rollingTokenHash, tokenHash))) ==
                 keccak256(abi.encodePacked(rollingTokenHash)),
             "Rolling token does not match."
         );
@@ -111,6 +125,7 @@ contract DAVYNFT is ERC721, Ownable {
         _tokenString = _append(_tokenString, Strings.toString(tokenId));
         _rarityString = _append(_rarityString, Strings.toString(tokenId));
         _rarities[tokenId] = rarity;
+        _rollingTokenHash = concatenateHash(_rollingTokenHash, tokenHash);
 
         emit DavyMinted(owner(), msg.sender, tokenId, rarity);
     }

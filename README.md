@@ -15,3 +15,14 @@ npx hardhat help
 ```
 
 [Getting started](https://hardhat.org/getting-started)
+
+
+# Deploying to moonbase alpha
+```shell
+npx hardhat run scripts/deploy-davy-jones.ts --network moonbase
+```
+
+# Deploying to moonbase alpha
+```shell
+npx hardhat run scripts/deploy-davy-jones.ts --network moonbase
+```

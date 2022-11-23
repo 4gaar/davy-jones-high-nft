@@ -1,7 +1,11 @@
-require('@nomiclabs/hardhat-ethers');
+import '@nomiclabs/hardhat-ethers';
 import { task } from "hardhat/config";
 import "@nomiclabs/hardhat-waffle";
-// import "@nomiclabs/hardhat-etherscan";
+import "@nomiclabs/hardhat-etherscan";
+import { config } from "dotenv";
+
+config()
+
 // import "hardhat-deploy";
 // import "solidity-coverage";
 // import "hardhat-contract-sizer";
@@ -26,13 +30,18 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  solidity: "0.8.7",
+  solidity: "0.8.17",
+  etherscan: {
+    apiKey: {
+      moonbaseAlpha: process.env.moonbaseAlphaApiKey
+    }
+  },
   networks: {
     hardhat: {
       chainId: 1337,
-      accounts: {
-        // count: 51
-      },
+      // accounts: {
+      //   count: 51
+      // },
       // mining: {
       //   auto: false,
       //   interval: 1000
@@ -46,7 +55,6 @@ module.exports = {
       url: 'https://rpc.api.moonbase.moonbeam.network',
       chainId: 1287, // (hex: 0x507),
       accounts: [privateKey]
-    },
-  
+    }
   },
 };

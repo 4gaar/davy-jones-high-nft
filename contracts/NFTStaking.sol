@@ -4,14 +4,18 @@ pragma solidity ^0.8.4;
 
 import "./DAVYRewards.sol";
 import "./DAVYNFT.sol";
+import "@prb/math/contracts/PRBMathUD60x18.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "abdk-libraries-solidity/ABDKMath64x64.sol";
 import "@quant-finance/solidity-datetime/contracts/DateTime.sol";
+import "hardhat/console.sol";
 
 contract NFTStaking is Ownable, IERC721Receiver {
-    int128 private _totalRewards = 500000000 ether;
-    int128 private _initalRewards = 500000 ether;
+    using PRBMathUD60x18 for uint256;
+
+    uint256 private _totalRewards = 500000000 ether;
+    uint256 private _initalRewards = 500000 ether;
     uint256 private _totalPayouts = 0;
     uint256 private _contractStart;
     uint256[] private _stakedTokens;
@@ -61,6 +65,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
                 _nftContract.ownerOf(tokenId) == msg.sender,
                 "not your token"
             );
+            require(tokenId > 0, "token ids must be greater than zero");
             require(_vault[tokenId].tokenId != tokenId, "already staked");
 
             rarity = _nftContract.getRarity(tokenId);
@@ -115,30 +120,84 @@ contract NFTStaking is Ownable, IERC721Receiver {
     //  term1 = P0
     //  term2 = k * P0
     //  term3 = k * P0 * exp(-t/k)
-    function getEarningsForEra() public view returns (uint256) {
-        uint256 daysInEra = DateTime.diffDays(
-            _contractStart,
-            block.timestamp
-        );
-        int128 t = ABDKMath64x64.fromUInt(daysInEra);
-        int128 PT = _totalRewards;
-        int128 P0 = _initalRewards;
-        int128 R = ABDKMath64x64.div(PT, P0);
-        int128 k = ABDKMath64x64.sub(R, 1);
-        int128 exp = ABDKMath64x64.divi(t, k);
-        int128 exponent = ABDKMath64x64.exp(
-            ABDKMath64x64.mul(ABDKMath64x64.fromInt(-1), exp)
-        );
-        int128 term1 = P0;
-        int128 term2 = P0 * (k / 2**64);
-        int128 term3 = ABDKMath64x64.mul(term2, exponent);
-        int128 earnings = ABDKMath64x64.add(
-            term1,
-            ABDKMath64x64.sub(term2, term3)
-        );
+    function _calculateEarnings(
+        uint256 daysInEra,        
+        uint256 initialRewards,
+        uint256 totalRewards
+    ) private pure returns (uint256) {
+        uint256 t = daysInEra;
+        uint256 PT = totalRewards;
+        uint256 P0 = initialRewards;
+        uint256 R = PT.div(P0);
+        uint256 k = R - 1e18;
 
-        return
-            uint256(ABDKMath64x64.to128x128(earnings)) / 2**64 - _totalPayouts;
+        return P0 + P0 * k - P0 * k.div((t * 1e18).div(k).exp());
+    }
+
+     function calculateEarnings(
+        uint256 daysInEra,        
+        uint256 initialRewards,
+        uint256 totalRewards
+    ) public view onlyOwner returns (uint256) {
+        return _calculateEarnings(daysInEra, initialRewards, totalRewards);
+    }
+
+    // rewards = P0  + P0 * k - P0 * k * exp(-t/k)
+    //
+    //  term1 = P0
+    //  term2 = k * P0
+    //  term3 = k * P0 * exp(-t/k)
+    function getEarningsForEra() public view returns (uint256) {
+        uint256 daysInEra = DateTime.diffDays(_contractStart, block.timestamp);
+
+
+return _calculateEarnings(daysInEra, _initalRewards, _totalRewards);
+
+
+        // int128 t = ABDKMath64x64.fromUInt(daysInEra);
+        // int128 PT = _totalRewards;
+        // int128 P0 = _initalRewards;
+        // int128 R = ABDKMath64x64.div(PT, P0);
+        // int128 k = ABDKMath64x64.sub(R, 1);
+        // int128 exp = ABDKMath64x64.divi(t, k);
+        // int128 exponent = ABDKMath64x64.exp(
+        //     ABDKMath64x64.mul(ABDKMath64x64.fromInt(-1), exp)
+        // );
+        // int128 term1 = P0;
+        // int128 term2 = P0 * (k / 2**64);
+        // int128 term3 = ABDKMath64x64.mul(term2, exponent);
+        // int128 earnings = ABDKMath64x64.add(
+        //     term1,
+        //     ABDKMath64x64.sub(term2, term3)
+        // );
+
+        // uint256 earningsForPeriod = uint256(ABDKMath64x64.to128x128(earnings)) /
+        //     2**64 -
+        //     _totalPayouts;
+
+        // console.log("earningsForPeriod:", earningsForPeriod);
+
+        // return earningsForPeriod;
+    }
+
+    // Calculates the linearized weight for index.
+    function _calculatePayoutRatio(
+        uint256 i,
+        uint256 N,
+        uint256 sum
+    ) private pure returns (uint256) {
+        uint256 weight = N - i;
+        uint256 ratio = (weight * 1e18).div(sum * 1e18);
+
+        return ratio;
+    }
+
+    function calculatePayoutRatio(
+        uint256 i,
+        uint256 N,
+        uint256 sum
+    ) public view onlyOwner returns (uint256) {
+        return _calculatePayoutRatio(i, N, sum);
     }
 
     function _setPayouts() private {
@@ -147,13 +206,21 @@ contract NFTStaking is Ownable, IERC721Receiver {
         uint256 amount;
         uint256 payout;
         Stake memory staked;
-        uint256 T = getEarningsForEra();
-        uint256 N = tokenIds.length;
+        uint256 tokenCount = tokenIds.length;
+        uint256 totalEarnings = getEarningsForEra();
+        uint256 sum = 0;
+        uint256 ratio;
 
-        for (uint256 i = 0; i < tokenIds.length; i++) {
-            tokenId = tokenIds[uint256(i)];
+        for (uint256 x = 1; x <= tokenCount; x++) {
+            sum += x;
+        }
+
+        for (uint256 i = 0; i < tokenCount; i++) {
+            ratio = _calculatePayoutRatio(i, tokenCount, sum);
+            tokenId = tokenIds[i];
             staked = _vault[tokenId];
-            amount = (staked.rarity * ((2 * T - (2 * T * i) / N) / N)) / 10;
+            amount = (staked.rarity * totalEarnings * ratio) / 1e18 / 1e4;
+            console.log("rarity:", staked.rarity, 1e4);
             _payouts[staked.owner] += uint256(amount);
             payout += amount;
 
@@ -162,7 +229,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
 
         _totalPayouts = payout;
 
-        emit TotalPayout(payout, T);
+        emit TotalPayout(payout, _totalPayouts);
     }
 
     function setPayouts() public onlyOwner {
