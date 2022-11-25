@@ -3,9 +3,9 @@ import { ethers } from "hardhat";
 import { Contract } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import keccak256 from "keccak256";
-import path from "path";
 
-const PRICE = ethers.utils.parseEther("2");
+let PRICE = 0;
+const logOutput = Boolean(process.env.logOutput);
 
 describe("DAVYNFT Tests", function () {
   let nftContract: Contract;
@@ -24,6 +24,7 @@ describe("DAVYNFT Tests", function () {
     );
 
     nftContract = await DAVYNFTContract.deploy();
+    await nftContract.deployed();
 
     IDENTITIES = {
       [nftContractOwner.address]: "NFT_CONTRACT_OWNER",
@@ -31,7 +32,7 @@ describe("DAVYNFT Tests", function () {
       [buyer.address]: "BUYER",
     };
 
-    await nftContract.deployed();
+    PRICE = Number(await nftContract.getPrice());
   });
 
   it("Should return token description and symbol", async function () {
@@ -61,8 +62,10 @@ describe("DAVYNFT Tests", function () {
       const expectedHash = keccak256(Buffer.concat([runningHash, value]));
       runningHash = expectedHash;
 
-      // console.log('expectedHash:', '0x' + expectedHash.toString('hex'))
-      // console.log('actual:      ', actualHash)
+      if (logOutput) {
+        console.log("expectedHash:", "0x" + expectedHash.toString("hex"));
+        console.log("actual:      ", actualHash);
+      }
 
       expect("0x" + expectedHash.toString("hex")).to.equal(actualHash);
     }
@@ -98,8 +101,6 @@ describe("DAVYNFT Tests", function () {
     }
   });
 
-
-
   it("Mint", async function () {
     const runningHashSeed = keccak256("this is a seed value;");
 
@@ -128,22 +129,24 @@ describe("DAVYNFT Tests", function () {
       await ethers.provider.getBalance(nftContractOwner.address)
     );
 
-    console.log(
-      "buyer balance before:",
-      buyerBalanceBefore,
-      "after:",
-      buyerBalanceAfter,
-      "difference:",
-      buyerBalanceAfter - buyerBalanceBefore
-    );
-    console.log(
-      "owner balance before:",
-      ownerBalanceBefore,
-      "after:",
-      ownerBalanceAfter,
-      "difference:",
-      ownerBalanceAfter - ownerBalanceBefore
-    );
+    if (logOutput) {
+      console.log(
+        "buyer balance before:",
+        buyerBalanceBefore,
+        "after:",
+        buyerBalanceAfter,
+        "difference:",
+        buyerBalanceAfter - buyerBalanceBefore
+      );
+      console.log(
+        "owner balance before:",
+        ownerBalanceBefore,
+        "after:",
+        ownerBalanceAfter,
+        "difference:",
+        ownerBalanceAfter - ownerBalanceBefore
+      );
+    }
 
     expect(IDENTITIES[buyerAddress]).to.equal("BUYER");
     expect(IDENTITIES[seller]).to.equal("NFT_CONTRACT_OWNER");

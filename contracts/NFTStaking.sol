@@ -7,7 +7,7 @@ import "./DAVYNFT.sol";
 import "@prb/math/contracts/PRBMathUD60x18.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "abdk-libraries-solidity/ABDKMath64x64.sol";
+// import "abdk-libraries-solidity/ABDKMath64x64.sol";
 import "@quant-finance/solidity-datetime/contracts/DateTime.sol";
 import "hardhat/console.sol";
 
@@ -18,7 +18,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
     uint256 private _initalRewards = 500000 ether;
     uint256 private _totalPayouts = 0;
     uint256 private _contractStart;
-    uint256[] private _stakedTokens;
+    uint256[] private _stakedTokens;    
 
     // struct to store a stake's token and owner
     struct Stake {
@@ -121,63 +121,36 @@ contract NFTStaking is Ownable, IERC721Receiver {
     //  term2 = k * P0
     //  term3 = k * P0 * exp(-t/k)
     function _calculateEarnings(
-        uint256 daysInEra,        
+        uint256 daysInEra,
         uint256 initialRewards,
         uint256 totalRewards
-    ) private pure returns (uint256) {
+    ) private view returns (uint256) {
         uint256 t = daysInEra;
         uint256 PT = totalRewards;
         uint256 P0 = initialRewards;
         uint256 R = PT.div(P0);
         uint256 k = R - 1e18;
+        uint256 payout = P0 + P0 * k - P0 * k.div((t * 1e18).div(k).exp());
 
-        return P0 + P0 * k - P0 * k.div((t * 1e18).div(k).exp());
+        if (_totalPayouts >= payout) {            
+            return 0;
+        } else {           
+            return payout - _totalPayouts;
+        }
     }
 
-     function calculateEarnings(
-        uint256 daysInEra,        
+    function calculateEarnings(
+        uint256 daysInEra,
         uint256 initialRewards,
         uint256 totalRewards
     ) public view onlyOwner returns (uint256) {
         return _calculateEarnings(daysInEra, initialRewards, totalRewards);
     }
-
-    // rewards = P0  + P0 * k - P0 * k * exp(-t/k)
-    //
-    //  term1 = P0
-    //  term2 = k * P0
-    //  term3 = k * P0 * exp(-t/k)
+    
     function getEarningsForEra() public view returns (uint256) {
         uint256 daysInEra = DateTime.diffDays(_contractStart, block.timestamp);
 
-
-return _calculateEarnings(daysInEra, _initalRewards, _totalRewards);
-
-
-        // int128 t = ABDKMath64x64.fromUInt(daysInEra);
-        // int128 PT = _totalRewards;
-        // int128 P0 = _initalRewards;
-        // int128 R = ABDKMath64x64.div(PT, P0);
-        // int128 k = ABDKMath64x64.sub(R, 1);
-        // int128 exp = ABDKMath64x64.divi(t, k);
-        // int128 exponent = ABDKMath64x64.exp(
-        //     ABDKMath64x64.mul(ABDKMath64x64.fromInt(-1), exp)
-        // );
-        // int128 term1 = P0;
-        // int128 term2 = P0 * (k / 2**64);
-        // int128 term3 = ABDKMath64x64.mul(term2, exponent);
-        // int128 earnings = ABDKMath64x64.add(
-        //     term1,
-        //     ABDKMath64x64.sub(term2, term3)
-        // );
-
-        // uint256 earningsForPeriod = uint256(ABDKMath64x64.to128x128(earnings)) /
-        //     2**64 -
-        //     _totalPayouts;
-
-        // console.log("earningsForPeriod:", earningsForPeriod);
-
-        // return earningsForPeriod;
+        return _calculateEarnings(daysInEra, _initalRewards, _totalRewards);
     }
 
     // Calculates the linearized weight for index.
@@ -220,14 +193,13 @@ return _calculateEarnings(daysInEra, _initalRewards, _totalRewards);
             tokenId = tokenIds[i];
             staked = _vault[tokenId];
             amount = (staked.rarity * totalEarnings * ratio) / 1e18 / 1e4;
-            console.log("rarity:", staked.rarity, 1e4);
             _payouts[staked.owner] += uint256(amount);
             payout += amount;
 
             emit PayeePayout(staked.owner, tokenId, _payouts[staked.owner]);
         }
 
-        _totalPayouts = payout;
+        _totalPayouts += payout;
 
         emit TotalPayout(payout, _totalPayouts);
     }

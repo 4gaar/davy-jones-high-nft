@@ -3,6 +3,7 @@ import { task } from "hardhat/config";
 import "@nomiclabs/hardhat-waffle";
 import "@nomiclabs/hardhat-etherscan";
 import { config } from "dotenv";
+import "hardhat-gas-reporter"
 
 config()
 

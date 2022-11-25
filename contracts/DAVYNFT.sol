@@ -13,10 +13,11 @@ contract DAVYNFT is ERC721, Ownable {
     string private _rarityString = "";
     bytes32 private _rollingTokenHash = bytes32(0);
     bytes32 private _rollingHash;
-    uint8 private _PRICE = 2;
+    uint256 private _PRICE = (2 ether) / 1e6;
     string private baseURI_ = "http://defaultBaseUri.com/";
     address private _stakingContractAddress;
     uint256 private NFT_SUPPLY = 0;
+    uint256 private _lastMintedTokenId;
 
     event DavyMinted(
         address indexed nftAddress,
@@ -38,14 +39,23 @@ contract DAVYNFT is ERC721, Ownable {
     }
 
     function initializeRollingTokenHash(bytes32 seed) public onlyOwner {
-        // console.log("seed:", _bytes32ToHex(seed));
-
+     
         require(
             _rollingTokenHash == bytes32(0),
             "The rolling token seed has already been set"
         );
 
         _rollingTokenHash = seed;
+    }
+
+    function getPrice() public view returns (uint256)
+    {
+        return _PRICE;
+    }
+
+    function getLastMintedToken() public view returns (uint256)
+    {
+        return _lastMintedTokenId;
     }
 
     function getTokenString() public view returns (string memory) {
@@ -126,6 +136,7 @@ contract DAVYNFT is ERC721, Ownable {
         _rarityString = _append(_rarityString, Strings.toString(tokenId));
         _rarities[tokenId] = rarity;
         _rollingTokenHash = concatenateHash(_rollingTokenHash, tokenHash);
+        _lastMintedTokenId = tokenId;
 
         emit DavyMinted(owner(), msg.sender, tokenId, rarity);
     }
