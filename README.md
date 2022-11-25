@@ -20,9 +20,10 @@ npx hardhat help
 # Deploying to moonbase alpha
 ```shell
 npx hardhat run scripts/deploy-davy-jones.ts --network moonbase
+npx hardhat run scripts/1_deploy-nft-contract.ts --network moonbase
 ```
 
-# Deploying to moonbase alpha
+# Verifyinig contract on moonbase alpha
 ```shell
-npx hardhat run scripts/deploy-davy-jones.ts --network moonbase
+npx hardhat verify --network moonbase <contract address>
 ```

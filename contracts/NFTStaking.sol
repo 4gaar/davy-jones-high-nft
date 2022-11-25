@@ -7,9 +7,9 @@ import "./DAVYNFT.sol";
 import "@prb/math/contracts/PRBMathUD60x18.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-// import "abdk-libraries-solidity/ABDKMath64x64.sol";
 import "@quant-finance/solidity-datetime/contracts/DateTime.sol";
 import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract NFTStaking is Ownable, IERC721Receiver {
     using PRBMathUD60x18 for uint256;
@@ -18,7 +18,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
     uint256 private _initalRewards = 500000 ether;
     uint256 private _totalPayouts = 0;
     uint256 private _contractStart;
-    uint256[] private _stakedTokens;    
+    uint256[] private _stakedTokens;
 
     // struct to store a stake's token and owner
     struct Stake {
@@ -47,6 +47,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
     // maps tokenId to stake
     mapping(uint256 => Stake) private _vault;
 
+    // maps wallet to payout
     mapping(address => uint256) private _payouts;
 
     constructor(DAVYNFT nftContract, DAVYRewards rewardsContract) {
@@ -111,9 +112,9 @@ contract NFTStaking is Ownable, IERC721Receiver {
         }
     }
 
-    function getContractStart() public view returns (uint256) {
-        return _contractStart;
-    }
+    // function getContractStart() public view returns (uint256) {
+    //     return _contractStart;
+    // }
 
     // rewards = P0  + P0 * k - P0 * k * exp(-t/k)
     //
@@ -132,13 +133,14 @@ contract NFTStaking is Ownable, IERC721Receiver {
         uint256 k = R - 1e18;
         uint256 payout = P0 + P0 * k - P0 * k.div((t * 1e18).div(k).exp());
 
-        if (_totalPayouts >= payout) {            
+        if (_totalPayouts >= payout) {
             return 0;
-        } else {           
+        } else {
             return payout - _totalPayouts;
         }
     }
 
+    // For development testing
     function calculateEarnings(
         uint256 daysInEra,
         uint256 initialRewards,
@@ -146,7 +148,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
     ) public view onlyOwner returns (uint256) {
         return _calculateEarnings(daysInEra, initialRewards, totalRewards);
     }
-    
+
     function getEarningsForEra() public view returns (uint256) {
         uint256 daysInEra = DateTime.diffDays(_contractStart, block.timestamp);
 
@@ -165,6 +167,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
         return ratio;
     }
 
+    // For development testing
     function calculatePayoutRatio(
         uint256 i,
         uint256 N,
@@ -204,6 +207,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
         emit TotalPayout(payout, _totalPayouts);
     }
 
+    // For development testing
     function setPayouts() public onlyOwner {
         _setPayouts();
     }
