@@ -140,12 +140,12 @@ contract NFTStaking is Ownable, IERC721Receiver {
         }
     }
 
-    // For development testing
+   // Make 'onlyOwner' after testing is complete.
     function calculateEarnings(
         uint256 daysInEra,
         uint256 initialRewards,
         uint256 totalRewards
-    ) public view onlyOwner returns (uint256) {
+    ) public view  returns (uint256) {
         return _calculateEarnings(daysInEra, initialRewards, totalRewards);
     }
 
@@ -167,12 +167,12 @@ contract NFTStaking is Ownable, IERC721Receiver {
         return ratio;
     }
 
-    // For development testing
+    // Make 'onlyOwner' after testing is complete.
     function calculatePayoutRatio(
         uint256 i,
         uint256 N,
         uint256 sum
-    ) public view onlyOwner returns (uint256) {
+    ) public pure  returns (uint256) {
         return _calculatePayoutRatio(i, N, sum);
     }
 
@@ -207,8 +207,8 @@ contract NFTStaking is Ownable, IERC721Receiver {
         emit TotalPayout(payout, _totalPayouts);
     }
 
-    // For development testing
-    function setPayouts() public onlyOwner {
+    // Make 'onlyOwner' after testing is complete.
+    function setPayouts() public {
         _setPayouts();
     }
 
