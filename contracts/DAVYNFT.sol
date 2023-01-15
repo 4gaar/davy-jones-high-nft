@@ -3,6 +3,7 @@ pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "hardhat/console.sol";
 
@@ -13,10 +14,11 @@ contract DAVYNFT is ERC721, Ownable {
     string private _rarityString = "";
     bytes32 private _rollingTokenHash = bytes32(0);
     bytes32 private _rollingHash;
-    uint8 private _PRICE = 2;
+    uint256 private _PRICE = (2 ether) / 1e6;
     string private baseURI_ = "http://defaultBaseUri.com/";
     address private _stakingContractAddress;
     uint256 private NFT_SUPPLY = 0;
+    uint256 private _lastMintedTokenId;
 
     event DavyMinted(
         address indexed nftAddress,
@@ -37,9 +39,8 @@ contract DAVYNFT is ERC721, Ownable {
         return baseURI_;
     }
 
+    // Sets the initial rolling hash value to be used to confirm the provenance hash.
     function initializeRollingTokenHash(bytes32 seed) public onlyOwner {
-        // console.log("seed:", _bytes32ToHex(seed));
-
         require(
             _rollingTokenHash == bytes32(0),
             "The rolling token seed has already been set"
@@ -48,8 +49,12 @@ contract DAVYNFT is ERC721, Ownable {
         _rollingTokenHash = seed;
     }
 
-    function getTokenString() public view returns (string memory) {
-        return _tokenString;
+    function getPrice() public view returns (uint256) {
+        return _PRICE;
+    }
+
+    function getLastMintedToken() public view returns (uint256) {
+        return _lastMintedTokenId;
     }
 
     function setStakingContract(address stakingContract) public onlyOwner {
@@ -72,6 +77,7 @@ contract DAVYNFT is ERC721, Ownable {
         return Strings.toHexString(uint256(data), 32);
     }
 
+    // Make 'onlyOwner' after testing is complete.
     function calculateHash(bytes memory value)
         public
         pure
@@ -82,8 +88,17 @@ contract DAVYNFT is ERC721, Ownable {
         return _bytes32ToHex(data);
     }
 
+    // Make 'onlyOwner' after testing is complete.
     function concatenateHash(bytes32 value1, bytes32 value2)
         public
+        pure
+        returns (bytes32)
+    {
+        return _concatenateHash(value1, value2);
+    }
+
+    function _concatenateHash(bytes32 value1, bytes32 value2)
+        private
         pure
         returns (bytes32)
     {
@@ -100,16 +115,16 @@ contract DAVYNFT is ERC721, Ownable {
         bytes32 tokenHash,
         bytes32 rollingTokenHash
     ) external payable {
- 
         // console.log("tokenId:                 ", tokenId);
         // console.log("_rollingTokenHash:       ", _bytes32ToHex(_rollingTokenHash));
         // console.log("tokenHash:               ", _bytes32ToHex(tokenHash));
         // console.log("rollingTokenHash:        ", _bytes32ToHex(rollingTokenHash));
-        // console.log("expectedRollingTokenHash:", _bytes32ToHex(concatenateHash(_rollingTokenHash, tokenHash)));
+        // console.log("expectedRollingTokenHash:", _bytes32ToHex(_concatenateHash(_rollingTokenHash, tokenHash)));
 
         require(
-            keccak256(abi.encodePacked(concatenateHash(_rollingTokenHash, tokenHash))) ==
-                keccak256(abi.encodePacked(rollingTokenHash)),
+            keccak256(
+                abi.encodePacked(_concatenateHash(_rollingTokenHash, tokenHash))
+            ) == keccak256(abi.encodePacked(rollingTokenHash)),
             "Rolling token does not match."
         );
 
@@ -125,7 +140,8 @@ contract DAVYNFT is ERC721, Ownable {
         _tokenString = _append(_tokenString, Strings.toString(tokenId));
         _rarityString = _append(_rarityString, Strings.toString(tokenId));
         _rarities[tokenId] = rarity;
-        _rollingTokenHash = concatenateHash(_rollingTokenHash, tokenHash);
+        _rollingTokenHash = _concatenateHash(_rollingTokenHash, tokenHash);
+        _lastMintedTokenId = tokenId;
 
         emit DavyMinted(owner(), msg.sender, tokenId, rarity);
     }

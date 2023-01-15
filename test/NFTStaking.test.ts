@@ -2,11 +2,24 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { BigNumber, Contract } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { PromisePool } from "@supercharge/promise-pool";
 import keccak256 from "keccak256";
+import fs from "fs";
+import { v4 as uuidv4 } from "uuid";
 
-const PRICE = ethers.utils.parseEther("2");
-const chunkSize = 10;
+let PRICE = 0;
+const logOutput = Boolean(process.env.logOutput);
+
+type ProvenanceHashItem = {
+  tokenId: number;
+  rarity: number;
+  tokenHash: string;
+  runningHash: string;
+};
+
+type ProvenanceHash = {
+  seedHash: string;
+  hashes: ProvenanceHashItem[];
+};
 
 describe("NFTStaking Tests", function () {
   let rewardsContract: Contract;
@@ -60,46 +73,9 @@ describe("NFTStaking Tests", function () {
     buyers.forEach((buyer, index) => {
       IDENTITIES[buyer.address] = `BUYER_${index + 1}`;
     });
+
+    PRICE = Number(await nftContract.getPrice());
   });
-
-  async function getBlockEarnings(
-    daysToAdd: number,
-    expectedEarnings: BigNumber
-  ) {
-    const contractStart = new Date(
-      Number(await stakingContract.getContractStart())
-    );
-    const newDate = new Date(contractStart);
-
-    newDate.setDate(contractStart.getDate() + daysToAdd);
-
-    const amountInSeconds =
-      (newDate.getTime() - contractStart.getTime()) / 1000;
-
-    await ethers.provider.send("evm_increaseTime", [amountInSeconds]);
-    await ethers.provider.send("evm_mine", []);
-
-    const earnings =
-      Math.floor(Number(await stakingContract.getEarningsForEra())) / 1e18;
-    const expected = Number(expectedEarnings) / 1e18;
-    const err = Math.abs((expected - earnings) / earnings);
-
-    console.log(
-      "era:",
-      daysToAdd,
-      "expectedEarnings:",
-      expected,
-      "actual earnings:",
-      earnings,
-      "err:",
-      err
-    );
-
-    expect(err).to.be.lessThanOrEqual(
-      0.001,
-      `Unexpected earnings over ${daysToAdd} days.`
-    );
-  }
 
   it("Should return token description and symbol", async function () {
     expect(await rewardsContract.name()).to.equal(
@@ -112,104 +88,109 @@ describe("NFTStaking Tests", function () {
     buyer: SignerWithAddress,
     tokenHash: Buffer,
     runningHash: Buffer,
-    index: number
+    tokenId: number
   ) {
-    console.log("staked token id:", index + 1);
-
     const mintTx = await nftContract
       .connect(buyer)
-      .mint(index + 1, 984, tokenHash, runningHash, { value: PRICE });
+      .mint(tokenId, 10000, tokenHash, runningHash, { value: PRICE });
     const mintTxReceipt = await mintTx.wait(1);
     const args = mintTxReceipt.events[2].args;
-    const tokenId = Number(args.tokenId);
+    const mintedTokenId = Number(args.tokenId);
+
+    expect(mintedTokenId).to.equal(tokenId);
 
     await stakingContract.connect(buyer).stake([tokenId]);
 
     return { buyerAddress: buyer.address, tokenId };
   }
 
-  // it("Stake many", async function () {
-  //   this.timeout(Number.MAX_SAFE_INTEGER);
+  function createProvidenceHash(tokenCount: number): ProvenanceHash {
+    const tokenIds = Array(10000)
+      .fill(0)
+      .map((_, index) => index + 1);
+    const shuffledTokenIds = tokenIds.sort((a, b) => 0.5 - Math.random());
+    const rarities = Array(10000)
+      .fill(0)
+      .map((_, index) => index + 1);
+    const shuffledRarities = rarities.sort((a, b) => 0.5 - Math.random());
+    let runningHash = keccak256(uuidv4());
 
-  //   await rewardsContract.addController(stakingContract.address);
+    const provenance: ProvenanceHash = {
+      seedHash: runningHash.toString("hex"),
+      hashes: [],
+    };
 
-  //   type BuyerMap = {
-  //     buyerAddress: string;
-  //     tokenId: number;
-  //   };
+    for (let i = 0; i < 10000; i++) {
+      const tokenId = shuffledTokenIds[i];
+      const rarity = shuffledRarities[i];
+      const tokenHash = keccak256(
+        Buffer.from(
+          `${runningHash.toString("hex")}|${String(tokenId).padStart(
+            5,
+            "0"
+          )}|${String(rarity).padStart(5, "0")}`
+        )
+      );
 
-  //   let totalStaked = 0;
-  //   const tokensMinted = [] as BuyerMap[];
-  //   const runningHashSeed = keccak256("this is a seed value;");
-  //   let runningHash: Buffer = Buffer.alloc(0);
+      runningHash = keccak256(Buffer.concat([runningHash, tokenHash]));
 
-  //   await nftContract.initializeRollingTokenHash(runningHashSeed);
+      provenance.hashes.push({
+        tokenId,
+        rarity,
+        tokenHash: tokenHash.toString("hex"),
+        runningHash: runningHash.toString("hex"),
+      });
+    }
 
-  //   for (let i = 0; i < buyers.length; i++) {
-  //     const buyer = buyers[i];
-  //     const tokenHash = keccak256(Buffer.from(`this is a test ${i + 1}`));
+    // Write the provenance hash to file so that it can be used for on chain testing.
+    if (process.env.provenanceOutputPath) {
+      const jsonData = JSON.stringify(provenance, null, 2);
 
-  //     if (i == 0) {
-  //       runningHash = keccak256(Buffer.concat([runningHashSeed, tokenHash]));
-  //     } else {
-  //       runningHash = keccak256(Buffer.concat([runningHash, tokenHash]));
-  //     }
+      fs.writeFile(
+        String(process.env.provenanceOutputPath),
+        jsonData,
+        (err) => {
+          if (err) {
+            console.error(err);
+          }
+          // file written successfully
+        }
+      );
+    }
 
-  //     tokensMinted.push(await mintAndStake(buyer, tokenHash, runningHash, i));
-  //   }
+    provenance.hashes = provenance.hashes.slice(0, tokenCount);
 
-  //   expect([...new Set(tokensMinted.map((x) => x.tokenId))].length).to.equal(
-  //     buyers.length
-  //   );
-
-  //   const stakedDays = 1 * 24 * 60 * 60;
-
-  //   await ethers.provider.send("evm_increaseTime", [stakedDays]);
-  //   await ethers.provider.send("evm_mine", []);
-  //   const buyer = buyers[0];
-  //   const tokenId = tokensMinted.filter(
-  //     (x) => x.buyerAddress == buyer.address
-  //   )[0].tokenId;
-
-  //   console.log("unstaking", tokenId, "for buyer", buyer.address);
-
-  //   await stakingContract.connect(buyers[0]).unstake([tokenId]);
-
-  //   totalStaked = Number(await stakingContract.getTotalStaked());
-
-  //   expect(totalStaked).to.equal(buyers.length - 1);
-  // });
+    return provenance;
+  }
 
   it("Stake and unstake", async function () {
+    const tokenIds = [] as number[];
+    const buyerCount = buyers.length;
+    const provenance = createProvidenceHash(buyerCount);
+
     console.time();
 
     await rewardsContract.addController(stakingContract.address);
 
-    const buyerCount = buyers.length;
-    const runningHashSeed = keccak256("this is a seed value;");
-    let runningHash: Buffer = Buffer.alloc(0);
-    const tokenIds = [] as number[];
-
-    await nftContract.initializeRollingTokenHash(runningHashSeed);
+    await nftContract.initializeRollingTokenHash(
+      Buffer.from(provenance.seedHash, "hex")
+    );
 
     for (let i = 0; i < buyers.length; i++) {
-      const tokenId = i + 1;
+      const hash = provenance.hashes[i];
+      const { tokenId } = hash;
+      const tokenHash = Buffer.from(hash.tokenHash, "hex");
+      const runningHash = Buffer.from(hash.runningHash, "hex");
       const buyer = buyers[i];
-      const tokenHash = keccak256(Buffer.from(`this is a test ${tokenId}`));
+      const token = await mintAndStake(buyer, tokenHash, runningHash, tokenId);
+      let nftOwner = await nftContract.ownerOf(token.tokenId);
+      const lastMintedToken = Number(await nftContract.getLastMintedToken());
 
-      if (i == 0) {
-        runningHash = keccak256(Buffer.concat([runningHashSeed, tokenHash]));
-      } else {
-        runningHash = keccak256(Buffer.concat([runningHash, tokenHash]));
+      if (logOutput) {
+        console.log("nftOwner:", nftOwner, "buyer:", buyer.address);
       }
 
-      const token = await mintAndStake(buyer, tokenHash, runningHash, tokenId);
-
-      let nftOwner = await nftContract.ownerOf(token.tokenId);
-
-      tokenIds.push(token.tokenId);
-
-      console.log("nftOwner:", nftOwner, "buyer:", buyer.address);
+      expect(lastMintedToken).to.equal(tokenId);
 
       expect(IDENTITIES[token.buyerAddress]).to.equal(
         IDENTITIES[buyer.address],
@@ -219,35 +200,11 @@ describe("NFTStaking Tests", function () {
         IDENTITIES[stakingContract.address],
         "NFT owner address does not NFT contract address."
       );
+
+      tokenIds.push(token.tokenId);
     }
 
     let totalStaked = Number(await stakingContract.getTotalStaked());
-
-    // for (let i = 0; i < buyerCount; i++) {
-    //   const buyer = buyers[i];
-    //   const mintTx = await nftContract.connect(buyer).mint({ value: PRICE });
-    //   const mintTxReceipt = await mintTx.wait(1);
-    //   const args = mintTxReceipt.events[2].args;
-    //   const tokenId = Number(args.tokenId);
-    //   let nftOwner = await nftContract.ownerOf(tokenId);
-
-    //   expect(IDENTITIES[nftOwner]).to.equal(IDENTITIES[buyer.address]);
-
-    //   const stakeTx = await stakingContract.connect(buyer).stake([tokenId]);
-
-    //   nftOwner = Number(await nftContract.ownerOf(tokenId));
-
-    //   expect(IDENTITIES[nftOwner]).to.equal(
-    //     IDENTITIES[stakingContract.address]
-    //   );
-
-    //   tokenIds[i] = tokenId;
-    // }
-
-    // console.timeEnd();
-
-    // let totalStaked = Number(await stakingContract.getTotalStaked());
-
     expect(totalStaked).to.equal(buyerCount);
 
     const stakedDays = 1 * 24 * 60 * 60;
@@ -265,32 +222,42 @@ describe("NFTStaking Tests", function () {
     setPayoutsTxReciept.events.forEach((event: any) => {
       actualPayout += Number(event.args.payout || 0);
 
-      if (IDENTITIES[event.args.owner]) {
-        console.log(
-          IDENTITIES[event.args.owner],
-          "payout:",
-          Number(event.args.payout || 0)
-        );
+      if (logOutput) {
+        if (IDENTITIES[event.args.owner]) {
+          console.log(
+            IDENTITIES[event.args.owner],
+            "payout:",
+            Number(event.args.payout || 0)
+          );
+        }
       }
     });
 
-    console.log("earnings:", earnings, "actual payout:", actualPayout);
+    if (logOutput) {
+      console.log("earnings:", earnings, "actual payout:", actualPayout);
+    }
 
     expect(earnings).to.be.greaterThanOrEqual(0);
     expect(actualPayout).to.be.greaterThanOrEqual(0);
     expect(actualPayout).to.be.lessThanOrEqual(earnings);
 
+    let payout = 0;
+
     for (let i = 0; i < buyerCount; i++) {
       const buyer = buyers[i];
-      const payout = await stakingContract.connect(buyer).getPayout();
+      payout += Number(await stakingContract.connect(buyer).getPayout());
     }
+
+    expect(payout).to.be.greaterThanOrEqual(0);
 
     earnings = Number(await stakingContract.getEarningsForEra());
 
     const tokenIdToUnstake = tokenIds[1];
     const owner = buyers[1];
 
-    console.log("owner:", owner.address, "token:", tokenIdToUnstake);
+    if (logOutput) {
+      console.log("owner:", owner.address, "token:", tokenIdToUnstake);
+    }
 
     await stakingContract.connect(owner).unstake([tokenIdToUnstake]);
 
@@ -301,12 +268,14 @@ describe("NFTStaking Tests", function () {
     let buyerBalance = Number(await rewardsContract.balanceOf(owner.address));
     let owedToBuyer = Number(await stakingContract.connect(owner).getPayout());
 
-    console.log(
-      "Buyer's balance before claim:",
-      buyerBalance,
-      "Amount owed to buyer:",
-      owedToBuyer
-    );
+    if (logOutput) {
+      console.log(
+        "Buyer's balance before claim:",
+        buyerBalance,
+        "Amount owed to buyer:",
+        owedToBuyer
+      );
+    }
 
     expect(Number(owedToBuyer)).to.be.greaterThan(0);
     expect(buyerBalance).to.equal(0);
@@ -316,15 +285,23 @@ describe("NFTStaking Tests", function () {
     buyerBalance = Number(await rewardsContract.balanceOf(owner.address));
     owedToBuyer = Number(await stakingContract.connect(owner).getPayout());
 
-    console.log(
-      "Buyer's balance after claim:",
-      buyerBalance,
-      "Amount owed to buyer:",
-      owedToBuyer
-    );
+    if (logOutput) {
+      console.log(
+        "Buyer's balance after claim:",
+        buyerBalance,
+        "Amount owed to buyer:",
+        owedToBuyer
+      );
+    }
 
     expect(buyerBalance).to.be.greaterThan(0);
     expect(owedToBuyer).to.equal(0);
+
+    const earningsAfterPayout = Number(
+      await stakingContract.getEarningsForEra()
+    );
+
+    expect(earningsAfterPayout).to.be.lessThan(earnings);
   });
 
   it("Calculate rewards for period", async function () {
@@ -351,7 +328,7 @@ describe("NFTStaking Tests", function () {
   });
 
   it("Calculate earnings distribution", async function () {
-    const totalTokens = 200;
+    const totalTokens = 10000;
     let sum = 0;
 
     for (let i = 1; i <= totalTokens; i++) {
