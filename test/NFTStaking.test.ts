@@ -116,7 +116,7 @@ describe("NFTStaking Tests", function () {
     let runningHash = keccak256(uuidv4());
 
     const provenance: ProvenanceHash = {
-      seedHash: runningHash.toString("base64"),
+      seedHash: runningHash.toString("hex"),
       hashes: [],
     };
 
@@ -137,8 +137,8 @@ describe("NFTStaking Tests", function () {
       provenance.hashes.push({
         tokenId,
         rarity,
-        tokenHash: tokenHash.toString("base64"),
-        runningHash: runningHash.toString("base64"),
+        tokenHash: tokenHash.toString("hex"),
+        runningHash: runningHash.toString("hex"),
       });
     }
 
@@ -173,14 +173,14 @@ describe("NFTStaking Tests", function () {
     await rewardsContract.addController(stakingContract.address);
 
     await nftContract.initializeRollingTokenHash(
-      Buffer.from(provenance.seedHash, "base64")
+      Buffer.from(provenance.seedHash, "hex")
     );
 
     for (let i = 0; i < buyers.length; i++) {
       const hash = provenance.hashes[i];
       const { tokenId } = hash;
-      const tokenHash = Buffer.from(hash.tokenHash, "base64");
-      const runningHash = Buffer.from(hash.runningHash, "base64");
+      const tokenHash = Buffer.from(hash.tokenHash, "hex");
+      const runningHash = Buffer.from(hash.runningHash, "hex");
       const buyer = buyers[i];
       const token = await mintAndStake(buyer, tokenHash, runningHash, tokenId);
       let nftOwner = await nftContract.ownerOf(token.tokenId);

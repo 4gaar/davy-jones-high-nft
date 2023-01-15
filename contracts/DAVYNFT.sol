@@ -3,6 +3,7 @@ pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "hardhat/console.sol";
 
@@ -76,11 +77,10 @@ contract DAVYNFT is ERC721, Ownable {
         return Strings.toHexString(uint256(data), 32);
     }
 
-    // For development testing
+    // Make 'onlyOwner' after testing is complete.
     function calculateHash(bytes memory value)
         public
-        view
-        onlyOwner
+        pure
         returns (string memory)
     {
         bytes32 data = _calculateHash(value);
@@ -88,11 +88,10 @@ contract DAVYNFT is ERC721, Ownable {
         return _bytes32ToHex(data);
     }
 
-    // For development testing
+    // Make 'onlyOwner' after testing is complete.
     function concatenateHash(bytes32 value1, bytes32 value2)
         public
-        view
-        onlyOwner
+        pure
         returns (bytes32)
     {
         return _concatenateHash(value1, value2);

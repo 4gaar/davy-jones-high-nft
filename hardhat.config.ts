@@ -31,25 +31,53 @@ task("deploy-nft-contract", "Deploys the NFT contract", async (_, hre) => {
   await nftContract.deployed();
 
   console.log("DAVYNFT deployed to:", nftContract.address);
+
+  await hre.run("verify:verify", { address: nftContract.address });  
 });
 
 task(
   "deploy-rewards-contract",
-  "Deploys the staking rewards contract", async (_, hre) => {
-  const DAVYRewards = await hre.ethers.getContractFactory("DAVYRewards");
-  const rewardsContract = await DAVYRewards.deploy();
+  "Deploys the staking rewards contract",
+  async (_, hre) => {
+    const DAVYRewards = await hre.ethers.getContractFactory("DAVYRewards");
+    const rewardsContract = await DAVYRewards.deploy();
 
-  await rewardsContract.deployed();
-  console.log("DAVYRewards deployed to:", rewardsContract.address);
-});
+    await rewardsContract.deployed();
+
+    console.log("DAVYRewards deployed to:", rewardsContract.address);
+
+    await hre.run("verify:verify", { address: rewardsContract.address });    
+  }
+);
 
 task("deploy-staking-contract", "Prints an account's balance")
   .addParam("nftContractAddress", "The NFT contract address")
   .addParam("rewardsContractAddress", "The rewards contract address")
   .setAction(async (taskArgs, hre) => {
-    // const balance = await ethers.provider.getBalance(taskArgs.account);
+    const nftContractArtifact = await hre.artifacts.readArtifact("DAVYNFT");
+    const nftContract = await hre.ethers.getContractAtFromArtifact(
+      nftContractArtifact,
+      taskArgs.nftContractAddress
+    );
 
-    // console.log(ethers.utils.formatEther(balance), "ETH");
+    const NFTStaking = await hre.ethers.getContractFactory("NFTStaking");
+    const stakingContract = await NFTStaking.deploy(
+      taskArgs.nftContractAddress,
+      taskArgs.rewardsContractAddress
+    );
+
+    await stakingContract.deployed();
+    await nftContract.setStakingContract(stakingContract.address);
+
+    console.log("NFTStaking contract deployed to:", stakingContract.address);
+
+    await hre.run("verify:verify", {
+      address: stakingContract.address,
+      constructorArguments: [
+        taskArgs.nftContractAddress,
+        taskArgs.rewardsContractAddress,
+      ],
+    });
   });
 
 // You need to export an object to set up your config
