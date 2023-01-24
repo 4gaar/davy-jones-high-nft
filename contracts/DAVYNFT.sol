@@ -40,7 +40,8 @@ contract DAVYNFT is ERC721, Ownable {
     }
 
     // Sets the initial rolling hash value to be used to confirm the provenance hash.
-    function initializeRollingTokenHash(bytes32 seed) public onlyOwner {
+    // Make 'onlyOwner' after testing is complete.
+    function initializeRollingTokenHash(bytes32 seed) public {
         require(
             _rollingTokenHash == bytes32(0),
             "The rolling token seed has already been set"

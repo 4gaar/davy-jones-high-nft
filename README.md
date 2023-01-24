@@ -19,9 +19,7 @@ npx hardhat help
 
 # Deploying to moonbase alpha
 ```shell
-npx hardhat deploy-nft-contract --network moonbase
-npx hardhat deploy-rewards-contract --network moonbase
-npx hardhat deploy-staking-contract --network moonbase --nft-contract-address <nft contract address> --rewards-contract-address <rewards contractract address>
+npx hardhat deploy-all --network moonbase
 ```
 
 # Verifyinig contract on moonbase alpha
