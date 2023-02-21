@@ -25,43 +25,59 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 });
 
 task("deploy-all", "Deploys all contracts", async (_, hre) => {
-  const DAVYNFT = await hre.ethers.getContractFactory("DAVYNFT");
-  const nftContract = await DAVYNFT.deploy();
-
-  await nftContract.deployed();
-  
   try {
-    await hre.run("verify:verify", { address: nftContract.address });
-  } catch {}
+    console.log("Deploying DAVYNFT...");
 
-  const DAVYRewards = await hre.ethers.getContractFactory("DAVYRewards");
-  const rewardsContract = await DAVYRewards.deploy();
+    const DAVYNFT = await hre.ethers.getContractFactory("DAVYNFT");
+    const nftContract = await DAVYNFT.deploy();
 
-  await rewardsContract.deployed();
-  
-  try {
-    await hre.run("verify:verify", { address: rewardsContract.address });
-  } catch {}
+    await nftContract.deployed();
+    console.log("Done.");
 
-  const NFTStaking = await hre.ethers.getContractFactory("NFTStaking");
-  const stakingContract = await NFTStaking.deploy(
-    nftContract.address,
-    rewardsContract.address
-  );
+    try {
+      console.log("verifying ...");
+      await hre.run("verify:verify", { address: nftContract.address });
+    } catch {}
 
-  await stakingContract.deployed();
-  await nftContract.setStakingContract(stakingContract.address);
-  
-  try {
-    await hre.run("verify:verify", {
-      address: stakingContract.address,
-      constructorArguments: [nftContract.address, rewardsContract.address],
-    });
-  } catch {}
+    console.log("Deploying DAVYRewards...");
+    const DAVYRewards = await hre.ethers.getContractFactory("DAVYRewards");
+    const rewardsContract = await DAVYRewards.deploy();
 
-  console.log("DAVYNFT deployed to:", nftContract.address);
-  console.log("DAVYRewards deployed to:", rewardsContract.address);
-  console.log("NFTStaking contract deployed to:", stakingContract.address);
+    await rewardsContract.deployed();
+    console.log("Done.");
+
+    try {
+      console.log("verifying ...");
+      await hre.run("verify:verify", { address: rewardsContract.address });
+    } catch {}
+
+    console.log("Deploying NFTStaking...");
+    const NFTStaking = await hre.ethers.getContractFactory("NFTStaking");
+    const stakingContract = await NFTStaking.deploy(
+      nftContract.address,
+      rewardsContract.address
+    );
+
+    await stakingContract.deployed();
+
+    console.log("Done.");
+
+    await nftContract.setStakingContract(stakingContract.address);
+
+    try {
+      console.log("verifying ...");
+      await hre.run("verify:verify", {
+        address: stakingContract.address,
+        constructorArguments: [nftContract.address, rewardsContract.address],
+      });
+    } catch {}
+
+    console.log("DAVYNFT deployed to:", nftContract.address);
+    console.log("DAVYRewards deployed to:", rewardsContract.address);
+    console.log("NFTStaking contract deployed to:", stakingContract.address);
+  } catch (error) {
+    console.error(error);
+  }
 });
 
 // You need to export an object to set up your config

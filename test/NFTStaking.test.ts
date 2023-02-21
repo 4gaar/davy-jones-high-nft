@@ -310,7 +310,76 @@ describe("NFTStaking Tests", function () {
       await stakingContract.getEarningsForEra()
     );
 
-    expect(earningsAfterPayout).to.be.lessThan(earnings)
+    expect(earningsAfterPayout).to.be.lessThan(earnings);
+  });
+
+  it("Stake and unstake same token", async function () {
+    const provenance = createProvidenceHash(1);
+    
+    await rewardsContract.addController(stakingContract.address);
+
+    await nftContract.initializeRollingTokenHash(
+      Buffer.from(provenance.seedHash, "hex")
+    );
+
+    const hash = provenance.hashes[0];
+    const { tokenId, rarity } = hash;
+    const tokenHash = Buffer.from(hash.tokenHash, "hex");
+    const runningHash = Buffer.from(hash.runningHash, "hex");
+    const buyer = buyers[0];
+
+    await nftContract
+      .connect(buyer)
+      .mint(tokenId, rarity, tokenHash, runningHash, { value: PRICE });
+
+      await nftContract.connect(buyer).approve(stakingContract.address, tokenId)
+
+    let owner = await nftContract.ownerOf(tokenId);
+
+    expect(IDENTITIES[buyer.address]).to.equal(
+      IDENTITIES[owner],
+      "Unexpectd NFT owner"
+    );
+
+    await stakingContract.connect(buyer).stake([tokenId]);
+    
+    owner = await nftContract.ownerOf(tokenId);
+
+    expect(IDENTITIES[stakingContract.address]).to.equal(
+      IDENTITIES[owner],
+      "Unexpectd NFT owner"
+    );
+
+    expect(await stakingContract._isStaked(tokenId)).to.be.true;
+
+    await stakingContract.connect(buyer).unstake([tokenId]);
+
+
+    expect(await stakingContract._isStaked(tokenId)).to.be.false;
+
+    owner = await nftContract.ownerOf(tokenId);
+
+    expect(IDENTITIES[buyer.address]).to.equal(
+      IDENTITIES[owner],
+      "Unexpectd NFT owner"
+    );    
+
+    // When minted the staking contract is approved but when the
+    // nft is unstaked the approve method has to be called again before
+    // staking.
+    await nftContract.connect(buyer).approve(stakingContract.address, tokenId)
+
+    await stakingContract.connect(buyer).stake([tokenId]);
+
+    expect(await stakingContract._isStaked(tokenId)).to.be.true;
+
+    owner = await nftContract.ownerOf(tokenId);
+
+    expect(IDENTITIES[stakingContract.address]).to.equal(
+      IDENTITIES[owner],
+      "Unexpectd NFT owner"
+    );
+
   });
 
   it("Calculate rewards for period", async function () {
@@ -338,20 +407,20 @@ describe("NFTStaking Tests", function () {
 
   it("Calculate earnings distribution", async function () {
     const totalTokens = 10000;
-     const N = totalTokens;
+    const N = totalTokens;
 
     for (let i = 0; i < N; i++) {
       const expectedValue = (2 * N - 2 * i) / (N + N * N);
       const actualValue = await stakingContract.calculatePayoutRatio(i, N);
-
-    
 
       const diffPercent =
         (100 * (actualValue / 1e18 - expectedValue)) / expectedValue;
 
       expect(Math.abs(diffPercent)).to.be.lessThanOrEqual(
         0.1,
-        `t: ${i}, expected: ${expectedValue}, actual: ${actualValue / 1e18}, diff %: ${diffPercent}`
+        `t: ${i}, expected: ${expectedValue}, actual: ${
+          actualValue / 1e18
+        }, diff %: ${diffPercent}`
       );
     }
   });

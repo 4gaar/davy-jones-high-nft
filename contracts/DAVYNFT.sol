@@ -9,7 +9,7 @@ import "hardhat/console.sol";
 
 error PriceNotMet(address nftAddress, uint256 price);
 
-contract DAVYNFT is ERC721, Ownable {
+contract DAVYNFT is ERC721Enumerable, Ownable {
     string private _tokenString = "";
     string private _rarityString = "";
     bytes32 private _rollingTokenHash = bytes32(0);
@@ -43,11 +43,15 @@ contract DAVYNFT is ERC721, Ownable {
     // Make 'onlyOwner' after testing is complete.
     function initializeRollingTokenHash(bytes32 seed) public {
         require(
-            _rollingTokenHash == bytes32(0),
+            _rollingTokenHash == 0,
             "The rolling token seed has already been set"
         );
 
         _rollingTokenHash = seed;
+    }
+
+    function rollingTokenHashInitialized() public view returns (bool) {
+        return _rollingTokenHash != 0;
     }
 
     function getPrice() public view returns (uint256) {
@@ -136,7 +140,8 @@ contract DAVYNFT is ERC721, Ownable {
         require(success, "Transfer failed");
 
         _safeMint(msg.sender, tokenId);
-        _approve(_stakingContractAddress, tokenId);
+        approve(_stakingContractAddress, tokenId);
+        
 
         _tokenString = _append(_tokenString, Strings.toString(tokenId));
         _rarityString = _append(_rarityString, Strings.toString(tokenId));

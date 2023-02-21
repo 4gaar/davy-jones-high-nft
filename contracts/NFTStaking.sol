@@ -51,7 +51,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
     mapping(address => uint256) private _payouts;
 
     // tracks staked tokens
-    mapping(uint256 => bool) private _tokenIsStaked;
+    // mapping(uint256 => bool) private _tokenIsStaked;
 
     constructor(DAVYNFT nftContract, DAVYRewards rewardsContract) {
         _nftContract = nftContract;
@@ -95,19 +95,16 @@ contract NFTStaking is Ownable, IERC721Receiver {
 
         for (uint256 i = 0; i < tokenIds.length; i++) {
             tokenId = tokenIds[i];
-            require(_senderIsNftOwner(tokenId), "not your token");
-            require(tokenId > 0, "token ids must be greater than zero");
-            require(!_tokenIsStaked[tokenId], "already staked");
+            require(_senderIsNftOwner(tokenId), "Not your token.");
+            require(tokenId > 0, "Token ids must be greater than zero.");
+            require(!_isStaked(tokenId), "The token is already staked.");
 
             rarity = _nftContract.getRarity(tokenId);
-
-            _nftContract.transferFrom(msg.sender, address(this), tokenId);
+            _nftContract.safeTransferFrom(msg.sender, address(this), tokenId);
 
             emit NFTStaked(msg.sender, tokenId, block.timestamp);
 
             _stakedTokens.push(tokenId);
-            _tokenIsStaked[tokenId] = true;
-
             _vault[tokenId] = Stake({owner: msg.sender, rarity: rarity});
         }
     }
@@ -125,7 +122,7 @@ contract NFTStaking is Ownable, IERC721Receiver {
     }
 
     function _isStaked(uint256 tokenId) public view returns (bool) {
-        return _tokenIsStaked[tokenId];
+        return _vault[tokenId].owner != address(0);
     }
 
     function unstake(uint256[] calldata tokenIds) external {
@@ -139,7 +136,8 @@ contract NFTStaking is Ownable, IERC721Receiver {
             require(staked.owner == msg.sender, "not your token");
 
             _removeToken(tokenId);
-            _nftContract.transferFrom(address(this), msg.sender, tokenId);
+
+            _nftContract.safeTransferFrom(address(this), msg.sender, tokenId);
 
             delete _vault[tokenId];
         }
@@ -164,7 +162,6 @@ contract NFTStaking is Ownable, IERC721Receiver {
         }
 
         if (index > 0) {
-            _tokenIsStaked[tokenId] = true;
             _orderStakedTokens(index);
         }
     }
@@ -184,9 +181,11 @@ contract NFTStaking is Ownable, IERC721Receiver {
         uint256 P0 = PRBMathUD60x18.fromUint(initialRewards);
         uint256 R = PT.div(P0);
         uint256 k = R - 1e18;
-        uint256 payout = PRBMathUD60x18.toUint( P0 + P0 * k - P0 * k.div((t).div(k).exp()));
+        uint256 payout = PRBMathUD60x18.toUint(
+            P0 + P0 * k - P0 * k.div((t).div(k).exp())
+        );
 
-        console.log("payout:", payout);
+        // console.log("payout:", payout);
 
         if (_totalPayouts >= payout) {
             return 0;
@@ -219,11 +218,10 @@ contract NFTStaking is Ownable, IERC721Receiver {
 
     // Calculates the linearized weight for index.
     // (2*N - 2*i)/(N + N^2)
-    function _calculatePayoutRatio(uint256 i, uint256 N)
-        private
-        pure
-        returns (uint256)
-    {
+    function _calculatePayoutRatio(
+        uint256 i,
+        uint256 N
+    ) private pure returns (uint256) {
         uint256 numerator = PRBMathUD60x18.fromUint(2 * N - 2 * i);
         uint256 denominator = PRBMathUD60x18.fromUint(N + N * N);
 
@@ -231,11 +229,10 @@ contract NFTStaking is Ownable, IERC721Receiver {
     }
 
     // Make 'onlyOwner' after testing is complete.
-    function calculatePayoutRatio(uint256 i, uint256 N)
-        public
-        pure
-        returns (uint256)
-    {
+    function calculatePayoutRatio(
+        uint256 i,
+        uint256 N
+    ) public pure returns (uint256) {
         return _calculatePayoutRatio(i, N);
     }
 
@@ -286,13 +283,15 @@ contract NFTStaking is Ownable, IERC721Receiver {
         emit Claimed(msg.sender, amount);
     }
 
+// TODO: can this being hardened?
     function onERC721Received(
         address,
-        address from,
+        address,
         uint256,
         bytes calldata
     ) external pure override returns (bytes4) {
-        require(from == address(0x0), "Cannot send nfts to Vault directly");
+        
+        // require (from == address(this), "Cannot send nfts to Vault directly");
         return IERC721Receiver.onERC721Received.selector;
     }
 
